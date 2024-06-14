@@ -1,6 +1,7 @@
 package yellowcard
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -117,7 +118,7 @@ func (cl *Client) call(
 	ctx context.Context,
 	method string,
 	path string,
-	body io.Reader,
+	body *bytes.Buffer,
 	params map[string]string,
 ) ([]byte, error) {
 	uri := cl.config.baseURL + path
@@ -127,21 +128,13 @@ func (cl *Client) call(
 		return nil, fmt.Errorf("yellowcard: create request - %v", err)
 	}
 
-	var bodyBytes []byte
-
 	if body != nil {
-		if _, err = body.Read(bodyBytes); err != nil {
-			return nil, fmt.Errorf("yellowcard: read body - %v", err)
-		}
+		req.Header.Set("Content-Type", "application/json charset=utf-8")
 	}
 
-	headers := cl.httpAuthHeaders(method, path, bodyBytes)
+	headers := cl.httpAuthHeaders(method, path, body.Bytes())
 	for key, value := range headers {
 		req.Header.Set(key, value)
-	}
-
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
 	}
 
 	if len(params) != 0 {
@@ -151,8 +144,6 @@ func (cl *Client) call(
 		}
 
 		req.URL.RawQuery = q.Encode()
-
-		fmt.Println(req.URL.String())
 	}
 
 	resp, err := cl.config.HTTPClient.Do(req)
@@ -169,8 +160,8 @@ func (cl *Client) call(
 		return nil, fmt.Errorf("yellowcard: read response body - %v", err)
 	}
 
-	if statusCode := resp.StatusCode; statusCode != http.StatusOK {
-		errResp := &errorResponse{StatusCode: statusCode}
+	if resp.StatusCode >= http.StatusBadRequest {
+		errResp := &errorResponse{StatusCode: resp.StatusCode}
 
 		if err = json.Unmarshal(resBody, errResp); err != nil {
 			return nil, fmt.Errorf("yellowcard: deserialize error response - %v", err)
@@ -268,6 +259,93 @@ func (cl *Client) GetRates(ctx context.Context, currency CurrencyCode) ([]*Rate,
 	}
 
 	return resp.Rates, nil
+}
+
+// ResolveBankAccount validates a bank account before sending.
+func (cl *Client) ResolveBankAccount(
+	ctx context.Context,
+	req *ResolveBankAccountRequest,
+) (*ResolveBankAccountResponse, error) {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("yellowcard: serialize request - %v", err)
+	}
+
+	body := bytes.NewBuffer(payload)
+
+	resBody, err := cl.call(ctx, http.MethodPost, "/business/details/bank", body, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp *ResolveBankAccountResponse
+	if err = json.Unmarshal(resBody, &resp); err != nil {
+		return nil, fmt.Errorf("yellowcard: deserialize bank account response - %v", err)
+	}
+
+	return resp, nil
+}
+
+// MakePayment submits a disbursement payment request. This will lock in a rate and await approval.
+func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest) (*PaymentResponse, error) {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("yellowcard: serialize request - %v", err)
+	}
+
+	body := bytes.NewBuffer(payload)
+
+	resBody, err := cl.call(ctx, http.MethodPost, "/business/payments", body, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp *PaymentResponse
+	if err = json.Unmarshal(resBody, &resp); err != nil {
+		return nil, fmt.Errorf("yellowcard: deserialize make payment response - %v", err)
+	}
+
+	return resp, nil
+}
+
+// AcceptPaymentRequest accepts a payment request for execution.
+func (cl *Client) AcceptPaymentRequest(ctx context.Context, id string) (*ApproveOrDenyPaymentResponse, error) {
+	var (
+		body = new(bytes.Buffer)
+		path = fmt.Sprintf("/business/payments/%s/accept", id)
+	)
+
+	resBody, err := cl.call(ctx, http.MethodPost, path, body, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp *ApproveOrDenyPaymentResponse
+	if err = json.Unmarshal(resBody, &resp); err != nil {
+		return nil, fmt.Errorf("yellowcard: deserialize approve payment response - %v", err)
+	}
+
+	return resp, nil
+}
+
+// DenyPaymentRequest denys a payment request.
+func (cl *Client) DenyPaymentRequest(ctx context.Context, id string) (*ApproveOrDenyPaymentResponse, error) {
+	var (
+		body = new(bytes.Buffer)
+		path = fmt.Sprintf("/business/payments/%s/deny", id)
+	)
+
+	resBody, err := cl.call(ctx, http.MethodPost, path, body, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp *ApproveOrDenyPaymentResponse
+	if err = json.Unmarshal(resBody, &resp); err != nil {
+		return nil, fmt.Errorf("yellowcard: deserialize deny payment response - %v", err)
+	}
+
+	return resp, nil
 }
 
 // New creates and initializes a new instance of API.
