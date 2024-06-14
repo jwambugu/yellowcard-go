@@ -13,16 +13,16 @@ import (
 	"time"
 )
 
-// _defaultHTTPTimeout is the default timeout on the http.Client used by the library.
-const _defaultHTTPTimeout = 60 * time.Second
-
 const (
 	_prodBaseURL    = "https://api.yellowcard.io"
 	_sandboxBaseURL = "https://sandbox.api.yellowcard.io"
 )
 
-var httpClient = &http.Client{
-	Timeout: _defaultHTTPTimeout,
+var _httpClient = &http.Client{}
+
+// HttpClient is an interface representing an HTTP client capable of making HTTP requests.
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // Environment represents the type of environment for API servers.
@@ -46,7 +46,7 @@ type Client struct {
 type ClientConfig struct {
 	baseURL    string
 	env        Environment
-	HTTPClient *http.Client
+	httpClient HttpClient
 }
 
 // DefaultConfig returns a default configuration for creating a ClientConfig instance.
@@ -55,7 +55,7 @@ func DefaultConfig() *ClientConfig {
 	return &ClientConfig{
 		baseURL:    _prodBaseURL,
 		env:        EnvironmentProduction,
-		HTTPClient: httpClient,
+		httpClient: _httpClient,
 	}
 }
 
@@ -74,24 +74,28 @@ func WithEnvironment(env Environment) func(config *ClientConfig) {
 }
 
 // WithHttpClient configures the ClientConfig based on the specified http client.
-func WithHttpClient(cl *http.Client) func(config *ClientConfig) {
+func WithHttpClient(cl HttpClient) func(config *ClientConfig) {
 	return func(config *ClientConfig) {
 		if cl != nil {
-			config.HTTPClient = cl
+			config.httpClient = cl
 		}
 	}
 }
 
-// httpAuthHeaders generates HTTP headers required for authentication using HMAC with SHA-256.
-func (cl *Client) httpAuthHeaders(method string, path string, body []byte) map[string]string {
+// getHeaders generates HTTP headers required for authentication using HMAC with SHA-256.
+func (cl *Client) getHeaders(method string, path string, body []byte, timeUTC time.Time) map[string]string {
 	var (
-		now = time.Now().UTC().Format(time.RFC3339)
-		mac = hmac.New(sha256.New, []byte(cl.secret))
+		timeStr = timeUTC.Format(time.RFC3339)
+		mac     = hmac.New(sha256.New, []byte(cl.secret))
 	)
 
-	mac.Write([]byte(now))
+	mac.Write([]byte(timeStr))
 	mac.Write([]byte(path))
 	mac.Write([]byte(method))
+
+	headers := map[string]string{
+		"Accept": "application/json",
+	}
 
 	if body != nil {
 		var (
@@ -100,6 +104,8 @@ func (cl *Client) httpAuthHeaders(method string, path string, body []byte) map[s
 		)
 
 		mac.Write([]byte(bodyHmacStr))
+
+		headers["Content-Type"] = "application/json charset=utf-8"
 	}
 
 	var (
@@ -107,13 +113,12 @@ func (cl *Client) httpAuthHeaders(method string, path string, body []byte) map[s
 		signature = base64.StdEncoding.EncodeToString(sum)
 	)
 
-	return map[string]string{
-		"Accept":         "application/json",
-		"Authorization":  fmt.Sprintf("YcHmacV1 %s:%s", cl.key, signature),
-		"X-YC-Timestamp": now,
-	}
+	headers["Authorization"] = fmt.Sprintf("YcHmacV1 %s:%s", cl.key, signature)
+	headers["X-YC-Timestamp"] = timeStr
+	return headers
 }
 
+// call sets all the required headers and makes all http requests
 func (cl *Client) call(
 	ctx context.Context,
 	method string,
@@ -128,11 +133,9 @@ func (cl *Client) call(
 		return nil, fmt.Errorf("yellowcard: create request - %v", err)
 	}
 
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json charset=utf-8")
-	}
+	now := time.Now().UTC()
 
-	headers := cl.httpAuthHeaders(method, path, body.Bytes())
+	headers := cl.getHeaders(method, path, body.Bytes(), now)
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
@@ -146,7 +149,7 @@ func (cl *Client) call(
 		req.URL.RawQuery = q.Encode()
 	}
 
-	resp, err := cl.config.HTTPClient.Do(req)
+	resp, err := cl.config.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("yellowcard: do request - %v", err)
 	}
@@ -173,6 +176,17 @@ func (cl *Client) call(
 	return resBody, nil
 }
 
+// doGetRequest handles all http.MethodGet requests
+func (cl *Client) doGetRequest(ctx context.Context, path string, params map[string]string) ([]byte, error) {
+	body := &bytes.Buffer{}
+	return cl.call(ctx, http.MethodGet, path, body, params)
+}
+
+// doGetRequest handles all http.MethodPost requests
+func (cl *Client) doPostRequest(ctx context.Context, path string, body *bytes.Buffer) ([]byte, error) {
+	return cl.call(ctx, http.MethodPost, path, body, nil)
+}
+
 // GetChannels retrieves all supported payment ramps (Bank Transfer, Mobile Money, E-Wallets transfers)
 // By default only active channels are returned.
 func (cl *Client) GetChannels(ctx context.Context, country CountryCode) ([]*Channel, error) {
@@ -185,7 +199,7 @@ func (cl *Client) GetChannels(ctx context.Context, country CountryCode) ([]*Chan
 		params["country"] = country.String()
 	}
 
-	resBody, err := cl.call(ctx, http.MethodGet, "/business/channels", nil, params)
+	resBody, err := cl.doGetRequest(ctx, "/business/channels", params)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +231,7 @@ func (cl *Client) GetNetworks(ctx context.Context, country CountryCode) ([]*Netw
 		params["country"] = country.String()
 	}
 
-	resBody, err := cl.call(ctx, http.MethodGet, "/business/networks", nil, params)
+	resBody, err := cl.doGetRequest(ctx, "/business/networks", params)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +262,7 @@ func (cl *Client) GetRates(ctx context.Context, currency CurrencyCode) ([]*Rate,
 		params["country"] = currency.String()
 	}
 
-	resBody, err := cl.call(ctx, http.MethodGet, "/business/rates", nil, params)
+	resBody, err := cl.doGetRequest(ctx, "/business/rates", params)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +287,7 @@ func (cl *Client) ResolveBankAccount(
 
 	body := bytes.NewBuffer(payload)
 
-	resBody, err := cl.call(ctx, http.MethodPost, "/business/details/bank", body, nil)
+	resBody, err := cl.doPostRequest(ctx, "/business/details/bank", body)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +309,7 @@ func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest) (*Paymen
 
 	body := bytes.NewBuffer(payload)
 
-	resBody, err := cl.call(ctx, http.MethodPost, "/business/payments", body, nil)
+	resBody, err := cl.doPostRequest(ctx, "/business/payments", body)
 	if err != nil {
 		return nil, err
 	}
