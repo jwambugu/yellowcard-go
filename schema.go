@@ -122,30 +122,7 @@ type PaymentRequest struct {
 	SequenceID  string      `json:"sequenceId"`
 }
 
-type PaymentResponse struct {
-	Amount           float64     `json:"amount"`
-	ChannelIID       string      `json:"channelId"`
-	ConvertedAmount  float64     `json:"convertedAmount"`
-	Country          string      `json:"country"`
-	CreatedAt        time.Time   `json:"createdAt"`
-	Currency         string      `json:"currency"`
-	Destination      Destination `json:"destination"`
-	DirectSettlement bool        `json:"directSettlement"`
-	ExpiresAt        time.Time   `json:"expiresAt"`
-	ForceAccept      bool        `json:"forceAccept"`
-	ID               string      `json:"id"`
-	PartnerID        string      `json:"partnerId"`
-	Rate             float64     `json:"rate"`
-	Reason           string      `json:"reason"`
-	RequestSource    string      `json:"requestSource"`
-	Sender           Sender      `json:"sender"`
-	SequenceID       string      `json:"sequenceId"`
-	SettlementInfo   any         `json:"settlementInfo"`
-	Status           string      `json:"status"`
-	UpdatedAt        time.Time   `json:"updatedAt"`
-}
-
-type ApproveOrDenyPaymentResponse struct {
+type Payment struct {
 	Amount                float64     `json:"amount"`
 	ChannelID             string      `json:"channelId"`
 	ConvertedAmount       float64     `json:"convertedAmount"`

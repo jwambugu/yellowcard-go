@@ -301,7 +301,7 @@ func (cl *Client) ResolveBankAccount(
 }
 
 // MakePayment submits a disbursement payment request. This will lock in a rate and await approval.
-func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest) (*PaymentResponse, error) {
+func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest) (*Payment, error) {
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("yellowcard: serialize request - %v", err)
@@ -314,16 +314,16 @@ func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest) (*Paymen
 		return nil, err
 	}
 
-	var resp *PaymentResponse
-	if err = json.Unmarshal(resBody, &resp); err != nil {
+	var payment *Payment
+	if err = json.Unmarshal(resBody, &payment); err != nil {
 		return nil, fmt.Errorf("yellowcard: deserialize make payment response - %v", err)
 	}
 
-	return resp, nil
+	return payment, nil
 }
 
 // AcceptPaymentRequest accepts a payment request for execution.
-func (cl *Client) AcceptPaymentRequest(ctx context.Context, id string) (*ApproveOrDenyPaymentResponse, error) {
+func (cl *Client) AcceptPaymentRequest(ctx context.Context, id string) (*Payment, error) {
 	var (
 		body = new(bytes.Buffer)
 		path = fmt.Sprintf("/business/payments/%s/accept", id)
@@ -334,16 +334,16 @@ func (cl *Client) AcceptPaymentRequest(ctx context.Context, id string) (*Approve
 		return nil, err
 	}
 
-	var resp *ApproveOrDenyPaymentResponse
-	if err = json.Unmarshal(resBody, &resp); err != nil {
+	var payment *Payment
+	if err = json.Unmarshal(resBody, &payment); err != nil {
 		return nil, fmt.Errorf("yellowcard: deserialize approve payment response - %v", err)
 	}
 
-	return resp, nil
+	return payment, nil
 }
 
 // DenyPaymentRequest denys a payment request.
-func (cl *Client) DenyPaymentRequest(ctx context.Context, id string) (*ApproveOrDenyPaymentResponse, error) {
+func (cl *Client) DenyPaymentRequest(ctx context.Context, id string) (*Payment, error) {
 	var (
 		body = new(bytes.Buffer)
 		path = fmt.Sprintf("/business/payments/%s/deny", id)
@@ -354,12 +354,29 @@ func (cl *Client) DenyPaymentRequest(ctx context.Context, id string) (*ApproveOr
 		return nil, err
 	}
 
-	var resp *ApproveOrDenyPaymentResponse
-	if err = json.Unmarshal(resBody, &resp); err != nil {
+	var payment *Payment
+	if err = json.Unmarshal(resBody, &payment); err != nil {
 		return nil, fmt.Errorf("yellowcard: deserialize deny payment response - %v", err)
 	}
 
-	return resp, nil
+	return payment, nil
+}
+
+// LookupPayment retrieves information about a specific payment.
+func (cl *Client) LookupPayment(ctx context.Context, id string) (*Payment, error) {
+	path := fmt.Sprintf("/business/payments/%s", id)
+
+	resBody, err := cl.doGetRequest(ctx, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var payment *Payment
+	if err = json.Unmarshal(resBody, &payment); err != nil {
+		return nil, fmt.Errorf("yellowcard: deserialize get payment response - %v", err)
+	}
+
+	return payment, nil
 }
 
 // New creates and initializes a new instance of API.

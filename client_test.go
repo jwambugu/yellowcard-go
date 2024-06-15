@@ -407,11 +407,11 @@ func TestClient_MakePayment(t *testing.T) {
 		ctx = context.Background()
 	)
 
-	paymentResp, err := client.MakePayment(ctx, paymentRequest)
+	payment, err := client.MakePayment(ctx, paymentRequest)
 	assert.NoError(t, err)
-	assert.NotNil(t, paymentResp)
-	assert.Equal(t, paymentRequest.Amount, paymentResp.Amount)
-	assert.Equal(t, paymentRequest.Destination.AccountBank, paymentResp.Destination.AccountBank)
+	assert.NotNil(t, payment)
+	assert.Equal(t, paymentRequest.Amount, payment.Amount)
+	assert.Equal(t, paymentRequest.Destination.AccountBank, payment.Destination.AccountBank)
 }
 
 func TestClient_AcceptPaymentRequest(t *testing.T) {
@@ -470,11 +470,11 @@ func TestClient_AcceptPaymentRequest(t *testing.T) {
 
 	ctx := context.Background()
 
-	acceptPaymentResp, err := client.AcceptPaymentRequest(ctx, paymentID)
+	payment, err := client.AcceptPaymentRequest(ctx, paymentID)
 	assert.NoError(t, err)
-	assert.NotNil(t, acceptPaymentResp)
-	assert.Equal(t, paymentID, acceptPaymentResp.ID)
-	assert.Equal(t, "process", acceptPaymentResp.Status)
+	assert.NotNil(t, payment)
+	assert.Equal(t, paymentID, payment.ID)
+	assert.Equal(t, "process", payment.Status)
 }
 
 func TestClient_DenyPaymentRequest(t *testing.T) {
@@ -533,11 +533,11 @@ func TestClient_DenyPaymentRequest(t *testing.T) {
 
 	ctx := context.Background()
 
-	denyPaymentResp, err := client.DenyPaymentRequest(ctx, paymentID)
+	payment, err := client.DenyPaymentRequest(ctx, paymentID)
 	assert.NoError(t, err)
-	assert.NotNil(t, denyPaymentResp)
-	assert.Equal(t, paymentID, denyPaymentResp.ID)
-	assert.Equal(t, "denied", denyPaymentResp.Status)
+	assert.NotNil(t, payment)
+	assert.Equal(t, paymentID, payment.ID)
+	assert.Equal(t, "denied", payment.Status)
 }
 
 func TestClient_AcceptPaymentRequestInvalidState(t *testing.T) {
@@ -558,11 +558,11 @@ func TestClient_AcceptPaymentRequestInvalidState(t *testing.T) {
 
 	ctx := context.Background()
 
-	acceptPaymentResp, err := client.AcceptPaymentRequest(ctx, paymentID)
+	payment, err := client.AcceptPaymentRequest(ctx, paymentID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "PaymentInvalidState")
 	assert.Contains(t, err.Error(), "payment is not in pending_approval state")
-	assert.Nil(t, acceptPaymentResp)
+	assert.Nil(t, payment)
 }
 
 func TestClient_DeclinePaymentRequestInvalidState(t *testing.T) {
@@ -583,11 +583,98 @@ func TestClient_DeclinePaymentRequestInvalidState(t *testing.T) {
 
 	ctx := context.Background()
 
-	denyPaymentResp, err := client.DenyPaymentRequest(ctx, paymentID)
+	payment, err := client.DenyPaymentRequest(ctx, paymentID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "PaymentInvalidState")
 	assert.Contains(t, err.Error(), "payment is not in pending_approval state")
-	assert.Nil(t, denyPaymentResp)
+	assert.Nil(t, payment)
+}
+
+func TestClient_LookupPayment(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		paymentID  = "c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		uri        = fmt.Sprintf("%s/business/payments/%s", client.config.baseURL, paymentID)
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusOK, `
+		{
+		   "partnerId":"deb55c03-9961-417a-9550-f5ba7fe258e9",
+		   "currency":"ZAR",
+		   "rate":18.57,
+		   "settlementInfo":{
+			  
+		   },
+		   "status":"denied",
+		   "createdAt":"2024-06-15T07:40:57.944Z",
+		   "forceAccept":false,
+		   "serviceFeeAmountUSD":37.46,
+		   "sequenceId":"ZEmcaXRAPc",
+		   "country":"ZA",
+		   "reason":"entertainment",
+		   "sender":{
+			  "country":"US",
+			  "address":"Sample Address",
+			  "idType":"license",
+			  "phone":"+12222222222",
+			  "dob":"10/10/1950",
+			  "name":"Sample Name",
+			  "idNumber":"0123456789",
+			  "email":"email@domain.com"
+		   },
+		   "convertedAmount":139119.94,
+		   "channelId":"81018280-e320-4c81-9b2f-6f636c2239d8",
+		   "expiresAt":"2024-06-15T07:50:57.943Z",
+		   "serviceFeeAmountLocal":695.63,
+		   "requestSource":"api",
+		   "updatedAt":"2024-06-15T07:41:24.624Z",
+		   "directSettlement":false,
+		   "amount":7491.65,
+		   "destination":{
+			  "networkName":"Finbond Mutual Bank",
+			  "accountBank":"589000",
+			  "networkId":"41109c18-9604-4389-8472-44ff4378c6cb",
+			  "accountNumber":"+12222222222",
+			  "accountName":"Ken Adams",
+			  "accountType":"momo"
+		   },
+		   "id":"c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		}`
+	})
+
+	ctx := context.Background()
+
+	payment, err := client.LookupPayment(ctx, paymentID)
+	assert.NoError(t, err)
+	assert.NotNil(t, payment)
+	assert.Equal(t, paymentID, payment.ID)
+	assert.Equal(t, "denied", payment.Status)
+}
+
+func TestClient_LookupPaymentNotFound(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		paymentID  = "c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		uri        = fmt.Sprintf("%s/business/payments/%s", client.config.baseURL, paymentID)
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusNotFound, `
+		{
+		   "code": "PaymentNotFound:",
+		   "message": "payment not found"
+		}`
+	})
+
+	ctx := context.Background()
+
+	payment, err := client.LookupPayment(ctx, paymentID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "PaymentNotFound")
+	assert.Nil(t, payment)
 }
 
 func TestNewClient_WithOpts(t *testing.T) {
