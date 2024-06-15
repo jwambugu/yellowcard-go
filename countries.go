@@ -82,6 +82,9 @@ func (c CountryCode) String() string {
 // ErrCountryNotSupported is returned when the provided country is not supported.
 var ErrCountryNotSupported = errors.New("yellowcard: country is not supported")
 
+// ErrCurrencyCodeNotSupported is returned when the provided currency code is not supported.
+var ErrCurrencyCodeNotSupported = errors.New("yellowcard: currency code is not supported")
+
 // CountryCodes is a list of currently supported countries. See https://docs.yellowcard.engineering/docs/coverage-api
 var CountryCodes = map[CountryCode]Country{
 	CountryCodeBF: {Code: "BF", CurrencyCode: CurrencyCodeXOF, Name: "Burkina Faso"},

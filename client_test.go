@@ -2,6 +2,7 @@ package yellowcard
 
 import (
 	"context"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"
@@ -64,11 +65,9 @@ func TestClient_HttpAuthHeaders(t *testing.T) {
 }
 
 func TestClient_GetChannels(t *testing.T) {
-
 	var (
 		httpClient = newMockHttpClient()
 		client     = New("key", "secret", WithHttpClient(httpClient))
-		ctx        = context.Background()
 		respBody   = `
 		{
 		   "channels":[
@@ -122,6 +121,8 @@ func TestClient_GetChannels(t *testing.T) {
 		return http.StatusOK, respBody
 	})
 
+	ctx := context.Background()
+
 	// Test gets all channels
 	channels, err := client.GetChannels(ctx, "")
 	assert.NoError(t, err)
@@ -141,6 +142,452 @@ func TestClient_GetChannels(t *testing.T) {
 	channels, err = client.GetChannels(ctx, CountryCodeCM)
 	assert.NoError(t, err)
 	assert.NotNil(t, channels)
+}
+
+func TestClient_GetNetworks(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		respBody   = `
+		{
+		   "networks":[
+			  {
+				 "code":"589000",
+				 "updatedAt":"2023-09-25T14:48:05.578Z",
+				 "status":"active",
+				 "channelIds":[
+					"81018280-e320-4c81-9b2f-6f636c2239d8"
+				 ],
+				 "createdAt":"2023-09-25T14:48:05.578Z",
+				 "accountNumberType":"bank",
+				 "id":"41109c18-9604-4389-8472-44ff4378c6cb",
+				 "country":"ZA",
+				 "name":"Finbond Mutual Bank",
+				 "countryAccountNumberType":"ZABANK"
+			  },
+			  {
+				 "code":"450905",
+				 "updatedAt":"2023-09-25T14:48:05.578Z",
+				 "status":"active",
+				 "channelIds":[
+					"81018280-e320-4c81-9b2f-6f636c2239d8"
+				 ],
+				 "createdAt":"2023-09-25T14:48:05.578Z",
+				 "accountNumberType":"bank",
+				 "id":"0d19d67e-5946-4289-bac1-ad147d7c84ad",
+				 "country":"ZA",
+				 "name":"Mercantile Bank Limited",
+				 "countryAccountNumberType":"ZABANK"
+			  },
+              {
+				 "code":"450905",
+				 "updatedAt":"2023-09-25T14:48:05.578Z",
+				 "status":"inactive",
+				 "channelIds":[
+					"81018280-e320-4c81-9b2f-6f636c2239d8"
+				 ],
+				 "createdAt":"2023-09-25T14:48:05.578Z",
+				 "accountNumberType":"bank",
+				 "id":"0d19d67e-5946-4289-bac1-ad147d7c84ad",
+				 "country":"ZA",
+				 "name":"Mercantile Bank Limited",
+				 "countryAccountNumberType":"ZABANK"
+			  }
+		   ]
+		}`
+	)
+
+	httpClient.MockRequest(client.config.baseURL+"/business/networks", func() (status int, body string) {
+		return http.StatusOK, respBody
+	})
+
+	ctx := context.Background()
+
+	// Test gets all networks
+	networks, err := client.GetNetworks(ctx, "")
+	assert.NoError(t, err)
+	assert.NotNil(t, networks)
+	assert.Len(t, networks, 2)
+
+	// Test ensures country code is valid
+	networks, err = client.GetNetworks(ctx, "MARS")
+	assert.EqualError(t, ErrCountryNotSupported, err.Error())
+	assert.Nil(t, networks)
+
+	httpClient.MockRequest(client.config.baseURL+"/business/networks?country=ZA", func() (status int, body string) {
+		return http.StatusOK, respBody
+	})
+
+	// Test returns only active networks for the country code
+	networks, err = client.GetNetworks(ctx, CountryCodeZA)
+	assert.NoError(t, err)
+	assert.NotNil(t, networks)
+	assert.Len(t, networks, 2)
+}
+
+func TestClient_GetRates(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		respBody   = `
+		{
+		   "rates":[
+			  {
+				 "buy":2615,
+				 "sell":2615,
+				 "locale":"TZ",
+				 "rateId":"tanzanian-shilling",
+				 "code":"TZS",
+				 "updatedAt":"2024-06-10T13:52:24.739Z"
+			  },
+			  {
+				 "locale":"crypto",
+				 "rateId":"ethereum",
+				 "code":"ETH",
+				 "updatedAt":"2024-05-03T09:26:00.570Z"
+			  },
+			  {
+				 "buy":13,
+				 "sell":-13.07,
+				 "locale":"Bw",
+				 "rateId":"pula",
+				 "code":"BWP",
+				 "updatedAt":"2024-06-10T13:52:35.713Z"
+			  }
+		   ]
+		}`
+	)
+
+	httpClient.MockRequest(client.config.baseURL+"/business/rates", func() (status int, body string) {
+		return http.StatusOK, respBody
+	})
+
+	ctx := context.Background()
+
+	// Test gets all rates
+	rates, err := client.GetRates(ctx, "")
+	assert.NoError(t, err)
+	assert.NotNil(t, rates)
+	assert.Len(t, rates, 3)
+
+	// Test ensures country code is valid
+	rates, err = client.GetRates(ctx, "MARS")
+	assert.EqualError(t, ErrCurrencyCodeNotSupported, err.Error())
+	assert.Nil(t, rates)
+
+	httpClient.MockRequest(client.config.baseURL+"/business/rates?currency=TZS", func() (status int, body string) {
+		return http.StatusOK, `
+		{
+		   "rates":[
+			  {
+				 "buy":2615,
+				 "sell":2615,
+				 "locale":"TZ",
+				 "rateId":"tanzanian-shilling",
+				 "code":"TZS",
+				 "updatedAt":"2024-06-10T13:52:24.739Z"
+			  }
+		   ]
+		}`
+	})
+
+	// Test returns only rates for the currency
+	rates, err = client.GetRates(ctx, CurrencyCodeTZS)
+	assert.NoError(t, err)
+	assert.NotNil(t, rates)
+	assert.Len(t, rates, 1)
+	assert.Equal(t, float64(2615), rates[0].Buy)
+	assert.Equal(t, "TZ", rates[0].Locale)
+}
+
+func TestClient_ResolveBankAccount(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+	)
+
+	httpClient.MockRequest(client.config.baseURL+"/business/details/bank", func() (status int, body string) {
+		return http.StatusOK, `
+		{
+		   "accountNumber":"589000",
+		   "accountName":"Ken Adams",
+		   "accountBank":"Finbond Mutual Bank"
+		}`
+	})
+
+	ctx := context.Background()
+
+	bankAccountDetails, err := client.ResolveBankAccount(ctx, &ResolveBankAccountRequest{
+		AccountNumber: "589000",
+		NetworkID:     "41109c18-9604-4389-8472-44ff4378c6cb",
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, bankAccountDetails)
+	assert.Equal(t, "589000", bankAccountDetails.AccountNumber)
+	assert.Equal(t, "Ken Adams", bankAccountDetails.AccountName)
+}
+
+func TestClient_MakePayment(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		uri        = client.config.baseURL + "/business/payments"
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusOK, `
+		{
+		   "amount":7491.65,
+		   "channelId":"81018280-e320-4c81-9b2f-6f636c2239d8",
+		   "destination":{
+			  "accountBank":"589000",
+			  "accountName":"Ken Adams",
+			  "accountNumber":"+12222222222",
+			  "accountType":"momo",
+			  "networkId":"41109c18-9604-4389-8472-44ff4378c6cb",
+			  "networkName":"Finbond Mutual Bank"
+		   },
+		   "reason":"entertainment",
+		   "sender":{
+			  "address":"Sample Address",
+			  "country":"US",
+			  "dob":"10/10/1950",
+			  "email":"email@domain.com",
+			  "idNumber":"0123456789",
+			  "idType":"license",
+			  "name":"Sample Name",
+			  "phone":"+12222222222"
+		   },
+		   "sequenceId":"nsahHJODjx",
+		   "partnerId":"deb55c03-9961-417a-9550-f5ba7fe258e9",
+		   "requestSource":"api",
+		   "id":"0aa5bd35-b969-5d1d-ae7b-dfc0c4abbaf7",
+		   "status":"created",
+		   "currency":"ZAR",
+		   "country":"ZA",
+		   "convertedAmount":139119.94,
+		   "rate":18.57,
+		   "forceAccept":false,
+		   "expiresAt":"2024-06-15T07:04:25.573Z",
+		   "settlementInfo":{
+			  
+		   },
+		   "createdAt":"2024-06-15T06:54:25.576Z",
+		   "updatedAt":"2024-06-15T06:54:25.576Z",
+		   "directSettlement":false
+		}`
+	})
+
+	var (
+		paymentRequest = &PaymentRequest{
+			Amount:    7491.65,
+			ChannelID: "81018280-e320-4c81-9b2f-6f636c2239d8",
+			Destination: Destination{
+				AccountBank:   "589000",
+				AccountName:   "Ken Adams",
+				AccountNumber: "+12222222222",
+				AccountType:   "momo",
+				Country:       "ZA",
+				NetworkID:     "41109c18-9604-4389-8472-44ff4378c6cb",
+			},
+			Reason: "entertainment",
+			Sender: Sender{
+				Address:  "Sample Address",
+				Country:  "US",
+				Dob:      "10/10/1950",
+				Email:    "email@domain.com",
+				IdNumber: "0123456789",
+				IDType:   "license",
+				Name:     "Sample Name",
+				Phone:    "+12222222222",
+			},
+			SequenceID: "nsahHJODjx",
+		}
+		ctx = context.Background()
+	)
+
+	paymentResp, err := client.MakePayment(ctx, paymentRequest)
+	assert.NoError(t, err)
+	assert.NotNil(t, paymentResp)
+	assert.Equal(t, paymentRequest.Amount, paymentResp.Amount)
+	assert.Equal(t, paymentRequest.Destination.AccountBank, paymentResp.Destination.AccountBank)
+}
+
+func TestClient_AcceptPaymentRequest(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		paymentID  = "d83011e8-341f-5e3e-b908-84cb4a552fcc"
+		uri        = fmt.Sprintf("%s/business/payments/%s/accept", client.config.baseURL, paymentID)
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusOK, `
+		{
+		   "partnerId":"deb55c03-9961-417a-9550-f5ba7fe258e9",
+		   "currency":"ZAR",
+		   "rate":18.57,
+		   "settlementInfo":{
+			  
+		   },
+		   "status":"process",
+		   "createdAt":"2024-06-15T07:09:36.607Z",
+		   "forceAccept":false,
+		   "serviceFeeAmountUSD":37.46,
+		   "sequenceId":"AovQYlKGkz",
+		   "country":"ZA",
+		   "reason":"entertainment",
+		   "sender":{
+			  "country":"US",
+			  "address":"Sample Address",
+			  "idType":"license",
+			  "phone":"+12222222222",
+			  "dob":"10/10/1950",
+			  "name":"Sample Name",
+			  "idNumber":"0123456789",
+			  "email":"email@domain.com"
+		   },
+		   "convertedAmount":139119.94,
+		   "channelId":"81018280-e320-4c81-9b2f-6f636c2239d8",
+		   "expiresAt":"2024-06-15T07:19:36.607Z",
+		   "serviceFeeAmountLocal":695.63,
+		   "requestSource":"api",
+		   "updatedAt":"2024-06-15T07:10:34.394Z",
+		   "directSettlement":false,
+		   "amount":7491.65,
+		   "destination":{
+			  "networkName":"Finbond Mutual Bank",
+			  "accountBank":"589000",
+			  "networkId":"41109c18-9604-4389-8472-44ff4378c6cb",
+			  "accountNumber":"+12222222222",
+			  "accountName":"Ken Adams",
+			  "accountType":"momo"
+		   },
+		   "id":"d83011e8-341f-5e3e-b908-84cb4a552fcc"
+		}`
+	})
+
+	ctx := context.Background()
+
+	acceptPaymentResp, err := client.AcceptPaymentRequest(ctx, paymentID)
+	assert.NoError(t, err)
+	assert.NotNil(t, acceptPaymentResp)
+	assert.Equal(t, paymentID, acceptPaymentResp.ID)
+	assert.Equal(t, "process", acceptPaymentResp.Status)
+}
+
+func TestClient_DenyPaymentRequest(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		paymentID  = "c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		uri        = fmt.Sprintf("%s/business/payments/%s/deny", client.config.baseURL, paymentID)
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusOK, `
+		{
+		   "partnerId":"deb55c03-9961-417a-9550-f5ba7fe258e9",
+		   "currency":"ZAR",
+		   "rate":18.57,
+		   "settlementInfo":{
+			  
+		   },
+		   "status":"denied",
+		   "createdAt":"2024-06-15T07:40:57.944Z",
+		   "forceAccept":false,
+		   "serviceFeeAmountUSD":37.46,
+		   "sequenceId":"ZEmcaXRAPc",
+		   "country":"ZA",
+		   "reason":"entertainment",
+		   "sender":{
+			  "country":"US",
+			  "address":"Sample Address",
+			  "idType":"license",
+			  "phone":"+12222222222",
+			  "dob":"10/10/1950",
+			  "name":"Sample Name",
+			  "idNumber":"0123456789",
+			  "email":"email@domain.com"
+		   },
+		   "convertedAmount":139119.94,
+		   "channelId":"81018280-e320-4c81-9b2f-6f636c2239d8",
+		   "expiresAt":"2024-06-15T07:50:57.943Z",
+		   "serviceFeeAmountLocal":695.63,
+		   "requestSource":"api",
+		   "updatedAt":"2024-06-15T07:41:24.624Z",
+		   "directSettlement":false,
+		   "amount":7491.65,
+		   "destination":{
+			  "networkName":"Finbond Mutual Bank",
+			  "accountBank":"589000",
+			  "networkId":"41109c18-9604-4389-8472-44ff4378c6cb",
+			  "accountNumber":"+12222222222",
+			  "accountName":"Ken Adams",
+			  "accountType":"momo"
+		   },
+		   "id":"c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		}`
+	})
+
+	ctx := context.Background()
+
+	denyPaymentResp, err := client.DenyPaymentRequest(ctx, paymentID)
+	assert.NoError(t, err)
+	assert.NotNil(t, denyPaymentResp)
+	assert.Equal(t, paymentID, denyPaymentResp.ID)
+	assert.Equal(t, "denied", denyPaymentResp.Status)
+}
+
+func TestClient_AcceptPaymentRequestInvalidState(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		paymentID  = "c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		uri        = fmt.Sprintf("%s/business/payments/%s/accept", client.config.baseURL, paymentID)
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusBadRequest, `
+		{
+		   "code":"PaymentInvalidState",
+		   "message":"payment is not in pending_approval state"
+		}`
+	})
+
+	ctx := context.Background()
+
+	acceptPaymentResp, err := client.AcceptPaymentRequest(ctx, paymentID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "PaymentInvalidState")
+	assert.Contains(t, err.Error(), "payment is not in pending_approval state")
+	assert.Nil(t, acceptPaymentResp)
+}
+
+func TestClient_DeclinePaymentRequestInvalidState(t *testing.T) {
+	var (
+		httpClient = newMockHttpClient()
+		client     = New("key", "secret", WithHttpClient(httpClient))
+		paymentID  = "c1de8da5-c11a-5cff-a17a-3e7c7085044c"
+		uri        = fmt.Sprintf("%s/business/payments/%s/deny", client.config.baseURL, paymentID)
+	)
+
+	httpClient.MockRequest(uri, func() (status int, body string) {
+		return http.StatusBadRequest, `
+		{
+		   "code":"PaymentInvalidState",
+		   "message":"payment is not in pending_approval state"
+		}`
+	})
+
+	ctx := context.Background()
+
+	denyPaymentResp, err := client.DenyPaymentRequest(ctx, paymentID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "PaymentInvalidState")
+	assert.Contains(t, err.Error(), "payment is not in pending_approval state")
+	assert.Nil(t, denyPaymentResp)
 }
 
 func TestNewClient_WithOpts(t *testing.T) {

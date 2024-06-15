@@ -256,10 +256,10 @@ func (cl *Client) GetRates(ctx context.Context, currency CurrencyCode) ([]*Rate,
 	params := make(map[string]string)
 	if currency != "" {
 		if _, ok := CurrencyCodes[currency]; !ok {
-			return nil, ErrCountryNotSupported
+			return nil, ErrCurrencyCodeNotSupported
 		}
 
-		params["country"] = currency.String()
+		params["currency"] = currency.String()
 	}
 
 	resBody, err := cl.doGetRequest(ctx, "/business/rates", params)
@@ -329,7 +329,7 @@ func (cl *Client) AcceptPaymentRequest(ctx context.Context, id string) (*Approve
 		path = fmt.Sprintf("/business/payments/%s/accept", id)
 	)
 
-	resBody, err := cl.call(ctx, http.MethodPost, path, body, nil)
+	resBody, err := cl.doPostRequest(ctx, path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func (cl *Client) DenyPaymentRequest(ctx context.Context, id string) (*ApproveOr
 		path = fmt.Sprintf("/business/payments/%s/deny", id)
 	)
 
-	resBody, err := cl.call(ctx, http.MethodPost, path, body, nil)
+	resBody, err := cl.doPostRequest(ctx, path, body)
 	if err != nil {
 		return nil, err
 	}
