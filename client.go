@@ -251,7 +251,7 @@ func (cl *Client) GetNetworks(ctx context.Context, country CountryCode) ([]*Netw
 	return networks, nil
 }
 
-// GetRates retrieves rates for supported countries
+// GetRates retrieves rates for supported countries.
 func (cl *Client) GetRates(ctx context.Context, currency CurrencyCode) ([]*Rate, error) {
 	params := make(map[string]string)
 	if currency != "" {
@@ -301,7 +301,16 @@ func (cl *Client) ResolveBankAccount(
 }
 
 // MakePayment submits a disbursement payment request. This will lock in a rate and await approval.
-func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest) (*Payment, error) {
+// Setting forceAccept field to true allows you to skip the accept payment request and your payment
+// will start processing once you submit payment request.
+// The amount has to be in USD and should be converted using the preferred Rate.
+func (cl *Client) MakePayment(ctx context.Context, req *PaymentRequest, forceAccept bool) (*Payment, error) {
+	req.ForceAccept = forceAccept
+
+	if req.CustomerType == "" {
+		req.CustomerType = CustomerTypeRetail
+	}
+
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("yellowcard: serialize request - %v", err)

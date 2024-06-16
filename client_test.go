@@ -387,7 +387,7 @@ func TestClient_MakePayment(t *testing.T) {
 				AccountBank:   "589000",
 				AccountName:   "Ken Adams",
 				AccountNumber: "+12222222222",
-				AccountType:   "momo",
+				AccountType:   AccountTypeMobileMoney,
 				Country:       "ZA",
 				NetworkID:     "41109c18-9604-4389-8472-44ff4378c6cb",
 			},
@@ -397,7 +397,7 @@ func TestClient_MakePayment(t *testing.T) {
 				Country:  "US",
 				Dob:      "10/10/1950",
 				Email:    "email@domain.com",
-				IdNumber: "0123456789",
+				IDNumber: "0123456789",
 				IDType:   "license",
 				Name:     "Sample Name",
 				Phone:    "+12222222222",
@@ -407,7 +407,7 @@ func TestClient_MakePayment(t *testing.T) {
 		ctx = context.Background()
 	)
 
-	payment, err := client.MakePayment(ctx, paymentRequest)
+	payment, err := client.MakePayment(ctx, paymentRequest, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, payment)
 	assert.Equal(t, paymentRequest.Amount, payment.Amount)

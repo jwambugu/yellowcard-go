@@ -1,4 +1,4 @@
-module yellowcard-go
+module github.com/jwambugu/yellowcard-go
 
 go 1.22.3
 

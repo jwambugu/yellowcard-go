@@ -5,6 +5,22 @@ import (
 	"time"
 )
 
+// AccountType represents the type of account to be used on the transaction
+type AccountType string
+
+const (
+	AccountTypeBank        AccountType = "bank"
+	AccountTypeMobileMoney AccountType = "momo"
+)
+
+// CustomerType identifies the type of customer making the transaction.
+type CustomerType string
+
+const (
+	CustomerTypeInstitution CustomerType = "institution"
+	CustomerTypeRetail      CustomerType = "retail"
+)
+
 // errorResponse represents an error response received from the API.
 type errorResponse struct {
 	Code       string `json:"code"`
@@ -40,7 +56,6 @@ type Channel struct {
 	WidgetStatus            string    `json:"widgetStatus,omitempty"`
 }
 
-// ChannelResponse represents the response returned by the get channels request
 type ChannelResponse struct {
 	Channels []*Channel `json:"channels"`
 }
@@ -60,7 +75,6 @@ type Network struct {
 	UpdatedAt                time.Time `json:"updatedAt"`
 }
 
-// NetworksResponse represents the response returned by the get networks request
 type NetworksResponse struct {
 	Networks []*Network `json:"networks"`
 }
@@ -75,7 +89,6 @@ type Rate struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// RatesResponse represents the response returned by the get rates request
 type RatesResponse struct {
 	Rates []*Rate `json:"rates"`
 }
@@ -93,13 +106,13 @@ type ResolveBankAccountResponse struct {
 }
 
 type Destination struct {
-	AccountBank   string `json:"accountBank"`
-	AccountName   string `json:"accountName"`
-	AccountNumber string `json:"accountNumber"`
-	AccountType   string `json:"accountType"`
-	Country       string `json:"country"`
-	NetworkID     string `json:"networkId"`
-	NetworkName   string `json:"networkName"`
+	AccountBank   string      `json:"accountBank"`
+	AccountName   string      `json:"accountName"`
+	AccountNumber string      `json:"accountNumber"`
+	AccountType   AccountType `json:"accountType"`
+	Country       string      `json:"country"`
+	NetworkID     string      `json:"networkId"`
+	NetworkName   string      `json:"networkName"`
 }
 
 type Sender struct {
@@ -107,19 +120,26 @@ type Sender struct {
 	Country  string `json:"country"`
 	Dob      string `json:"dob"`
 	Email    string `json:"email"`
-	IdNumber string `json:"idNumber"`
+	IDNumber string `json:"idNumber"`
 	IDType   string `json:"idType"`
 	Name     string `json:"name"`
 	Phone    string `json:"phone"`
 }
 
 type PaymentRequest struct {
-	Amount      float64     `json:"amount"`
-	ChannelID   string      `json:"channelId"`
-	Destination Destination `json:"destination"`
-	Reason      string      `json:"reason"`
-	Sender      Sender      `json:"sender"`
-	SequenceID  string      `json:"sequenceId"`
+	Amount    float64 `json:"amount"`
+	ChannelID string  `json:"channelId"`
+	// CustomerType determines the type of validation that is performed on the sender.
+	// If value is institution, the sender request object will be validated to ensure
+	// it includes businessName and businessId parameter.
+	// If the value is retail, the sender request object will be validated to ensure
+	// it includes name, phone, email, country, address, dob, idNumber and idType.
+	CustomerType CustomerType `json:"customerType"`
+	Destination  Destination  `json:"destination"`
+	ForceAccept  bool         `json:"forceAccept"`
+	Reason       string       `json:"reason"`
+	Sender       Sender       `json:"sender"`
+	SequenceID   string       `json:"sequenceId"`
 }
 
 type Payment struct {
